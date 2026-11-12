@@ -1,0 +1,47 @@
+# yovoice 网页版：CPU 与 NVIDIA 显卡两套服务，按需起一个。
+# 用法：
+#   docker compose -f deploy/docker-compose.yml up -d yovoice       # CPU
+#   docker compose -f deploy/docker-compose.yml up -d yovoice-gpu   # NVIDIA 显卡
+# 令牌不配置时每次启动随机生成，登录地址见容器日志里的 loginUrl。
+# 固定令牌：export YOVOICE_WEB_TOKEN="$(openssl rand -hex 32)"
+
+services:
+  yovoice:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: yovoice:latest
+    container_name: yovoice
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      YOVOICE_WEB_TOKEN: "${YOVOICE_WEB_TOKEN:-}"
+    volumes:
+      - yovoice-data:/data
+
+  # 需要宿主机装好 NVIDIA 驱动与 nvidia-container-toolkit，驱动要支持 CUDA 12.8。
+  yovoice-gpu:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.cuda
+    image: yovoice:cu128
+    container_name: yovoice-gpu
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      YOVOICE_WEB_TOKEN: "${YOVOICE_WEB_TOKEN:-}"
+    volumes:
+      - yovoice-gpu-data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  yovoice-data:
+  yovoice-gpu-data:

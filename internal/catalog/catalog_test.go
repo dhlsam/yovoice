@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -44,6 +45,25 @@ func TestVersionAtLeast(t *testing.T) {
 	}
 	if ServerBackend("cuda13") != "cuda" || ServerBackend("cuda") != "cuda" || ServerBackend("cpu") != "cpu" {
 		t.Error("两种 CUDA 构建都应使用 audio.cpp 的 cuda 后端")
+	}
+}
+
+// Linux 的 CUDA 内核由 upstream 的 CUDA 12.8 构建与随附运行库组成，两个包都要有校验值。
+func TestLinuxCUDAArchives(t *testing.T) {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Skip("只在 Linux x64 上检查")
+	}
+	a, err := RuntimeArchives("cuda")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a) != 2 || !strings.Contains(a[0].Name, "cuda12.8") || !strings.Contains(a[1].Name, "cudart") {
+		t.Fatal(a)
+	}
+	for _, item := range a {
+		if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(item.Hash) {
+			t.Fatal(item)
+		}
 	}
 }
 

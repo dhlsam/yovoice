@@ -143,6 +143,26 @@ Agent 通过独立 CLI 完成配音、写歌、音效、转写字幕和歌曲分
 
 <a href="https://glama.ai/mcp/servers/leemysw/yovoice"><img width="380" height="200" src="https://glama.ai/mcp/servers/leemysw/yovoice/badges/card.svg" alt="yovoice 在 Glama 上的 MCP 服务页" /></a>
 
+## 服务器上的网页版
+
+用 Docker 把整个工作台放到服务器上，浏览器打开就能用：
+
+```sh
+docker build -f deploy/Dockerfile -t yovoice .
+docker run -d -p 8080:8080 -e YOVOICE_WEB_TOKEN="$(openssl rand -hex 32)" -v yovoice-data:/data yovoice
+```
+
+打开 <http://localhost:8080>，用 `docker logs yovoice` 打印的令牌登录。NVIDIA 显卡用 CUDA 镜像：
+
+```sh
+docker build -f deploy/Dockerfile.cuda -t yovoice:cu128 .
+docker run -d --gpus all -p 8080:8080 -e YOVOICE_WEB_TOKEN="$(openssl rand -hex 32)" -v yovoice-data:/data yovoice:cu128
+```
+
+令牌、反向代理与资源占用见[网页版与 Docker 部署指南](docs/docker_zh.md)。
+
+---
+
 ## 开发
 
 ```sh

@@ -37,11 +37,28 @@ yovoice models download index-2.5-q8
 | --- | --- |
 | macOS · Apple Silicon | `--backend metal`, `--backend cpu` |
 | Windows · x64 | `--backend cpu`, `--backend cuda`, `--backend vulkan` |
-| Linux · x64 | `--backend cpu`, `--backend vulkan` |
+| Linux · x64 | `--backend cpu`, `--backend cuda`, `--backend vulkan` |
 
 GPU backends require compatible hardware and drivers. Run `setup` again to switch backends.
 
 Model downloads use ModelScope by default. Add `--source huggingface` or `--source mirror` to change the source. Downloads resume after interruption and are verified automatically. Only the model packages listed by yovoice can be installed; see [model selection](models.md) for input requirements and examples.
+
+## Serve the web version
+
+```sh
+yovoice web --listen 0.0.0.0:8080 --web-dir web/dist
+```
+
+`web` serves the full creation workspace over HTTP, so a browser on any machine can use it while inference stays on the server. It needs the built frontend in `--web-dir` (default `web/dist`) and an access token of at least 32 characters:
+
+```sh
+export YOVOICE_WEB_TOKEN="$(openssl rand -hex 32)"
+yovoice web --listen 0.0.0.0:8080
+```
+
+Without a token a random one is generated at startup; the printed `loginUrl` signs the browser in directly. The API also accepts `Authorization: Bearer <token>`. Add `--tls-cert` and `--tls-key` to serve HTTPS, or put the service behind a reverse proxy.
+
+For containers and GPU servers, see the [web version and Docker deployment guide](docker.md).
 
 ## Generate speech
 

@@ -9,7 +9,7 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import { Switch } from '@astryxdesign/core/Switch';
 import { useTranslator } from '@astryxdesign/core/i18n';
 import { FolderOpen, FolderCog, ArrowUpRight } from 'lucide-react';
-import { call, isLinux, isMac } from '../../shared/lib/client';
+import { call, isLinux, isMac, isServer } from '../../shared/lib/client';
 import { aiServiceHidden, featureHidden, runtimeStatus, type EngineInfo, type ModelPackage, type State, type Draft, type UiLocale, modelTab, modelTabs } from '../../shared/workbench';
 import { CallError } from '../../shared/lib/call-error';
 import { uiLocales } from '../../shared/i18n/locale';
@@ -57,6 +57,12 @@ export function Settings({ state, catalog, engine, draft, run, focus, active, on
   const runtime = runtimeStatus(state, engine);
   // 显示已安装内核的版本；尚未安装时显示将要安装的推荐版本。
   const runtimeVersion = state.runtimeVersion ?? engine.version;
+  // 可选推理设备随系统而定：macOS 只有 Metal，Linux 额外提供 CUDA 12.8，Windows 提供两代 CUDA。
+  const backendOptions = isMac
+    ? [{ value: 'cpu', label: 'CPU' }, { value: 'metal', label: 'Apple GPU · Metal' }]
+    : isLinux
+      ? [{ value: 'cpu', label: 'CPU' }, { value: 'cuda', label: 'NVIDIA GPU · CUDA 12.8' }, { value: 'vulkan', label: t('@yovoice.settings.backend.vulkan') }]
+      : [{ value: 'cpu', label: 'CPU' }, { value: 'cuda', label: 'NVIDIA GPU · CUDA 12.4' }, { value: 'cuda13', label: 'NVIDIA GPU · CUDA 13.3' }, { value: 'vulkan', label: t('@yovoice.settings.backend.vulkan') }];
   return <VStack className="settings-page" gap={6}>
     <header><h1>{t('@yovoice.settings.title')}</h1></header>
     <TabList value={tab} onChange={setTab} role="tablist" hasDivider>
@@ -96,7 +102,8 @@ export function Settings({ state, catalog, engine, draft, run, focus, active, on
       <FeatureSettings state={state} run={run} />
       {featureHidden(state.preferences, 'transcribe') ? null : <TranscribeSettings state={state} run={run} />}
       <StorageSettings state={state} run={run} busy={busy || modelBusy} />
-      <LocalAPISettings run={run} />
+      {/* 网页版本身就是 HTTP 服务，不需要再开一层本机接口。 */}
+      {isServer ? null : <LocalAPISettings run={run} />}
       <SettingsGroup title={t('@yovoice.settings.diagnosticsGroup')}>
         <SettingsRow label={t('@yovoice.settings.diagnostics')} hint={t('@yovoice.settings.diagnosticsHint')}>
           <Button size="sm" label={t('@yovoice.settings.viewLogs')} onClick={() => setTab('logs')} />
@@ -124,7 +131,7 @@ export function Settings({ state, catalog, engine, draft, run, focus, active, on
       ? <Suspense fallback={<p role="status">{t('@yovoice.app.loading')}</p>}><AssetsPage state={state} active={active} run={run} onError={onError} openProject={openProject} /></Suspense> : tab === 'logs' ? <LogViewer run={run} /> : <VStack className="settings-panel engine-settings" gap={6} id="engine-panel" role="tabpanel" aria-label={t('@yovoice.settings.tabEngine')}>
       <SettingsGroup title={<>audio.cpp{runtimeVersion ? <small className="model-size">{runtimeVersion}</small> : null}</>}>
         <SettingsRow className="engine-setting-row" label={t('@yovoice.settings.computeDevice')}>
-          <Selector size="sm" label={t('@yovoice.settings.computeDevice')} isLabelHidden value={preferences.backend} options={[{ value: 'cpu', label: 'CPU' }, ...(isMac ? [{ value: 'metal', label: 'Apple GPU · Metal' }] : [...(isLinux ? [] : [{ value: 'cuda', label: 'NVIDIA GPU · CUDA 12.4' }, { value: 'cuda13', label: 'NVIDIA GPU · CUDA 13.3' }]), { value: 'vulkan', label: t('@yovoice.settings.backend.vulkan') }])]} onChange={backend => run(() => call('preferences.save', { ...preferences, backend }))} width="calc(var(--spacing-10) * 6)" className="compute-device" />
+          <Selector size="sm" label={t('@yovoice.settings.computeDevice')} isLabelHidden value={preferences.backend} options={backendOptions} onChange={backend => run(() => call('preferences.save', { ...preferences, backend }))} width="calc(var(--spacing-10) * 6)" className="compute-device" />
         </SettingsRow>
         {preferences.backend === 'cuda' || preferences.backend === 'cuda13' ? <SettingsRow className="engine-setting-row" label={t('@yovoice.settings.performanceFirst')} hint={t('@yovoice.settings.performanceFirstHint')}>
           <Switch size="sm" label={t('@yovoice.settings.performanceFirst')} isLabelHidden htmlName="performanceFirst" value={preferences.performanceFirst ?? false} onChange={performanceFirst => run(() => call('preferences.save', { ...preferences, performanceFirst }))} />

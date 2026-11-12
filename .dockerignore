@@ -1,0 +1,10 @@
+# 词法：Docker 构建只需要前端、服务端源码与打包脚本。
+.git
+.github
+artifacts
+desktop
+docs
+skills
+web/node_modules
+web/dist
+*.md

@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### English
+
+- Web version: `yovoice web` serves the full creation workspace over HTTP, so you can work in the browser on a server. Access needs a token (cookie or `Authorization: Bearer`), and the startup log prints a login link you can open right away.
+- Docker deployment: `deploy/Dockerfile` builds a web image with the frontend, the service and the bundled converter; `deploy/Dockerfile.cuda` adds the CUDA 12.8 engine for NVIDIA GPUs, and `deploy/docker-compose.yml` starts either one.
+- Linux GPUs: the inference engine can now be installed for CUDA 12.8 next to CPU and Vulkan, so a server with an NVIDIA card runs inference on the GPU.
+
+### 简体中文
+
+- 网页版：`yovoice web` 在服务器上提供完整的创作界面，浏览器打开就能用。访问需要令牌（Cookie 或 `Authorization: Bearer`），启动日志里会打印可以直接打开的登录链接。
+- Docker 部署：`deploy/Dockerfile` 构建网页版镜像，含前端、服务与随包转换器；`deploy/Dockerfile.cuda` 额外内置 CUDA 12.8 内核，NVIDIA 显卡可用；`deploy/docker-compose.yml` 一键起 CPU 版或显卡版。
+- Linux 显卡：推理内核新增 CUDA 12.8 选项，与 CPU、Vulkan 并列，服务器上的 NVIDIA 显卡可以直接跑推理。
+
 ## [0.7.0] - 2026-11-11
 
 ### English

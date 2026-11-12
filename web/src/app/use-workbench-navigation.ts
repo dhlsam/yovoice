@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useResizable } from '@astryxdesign/core/Resizable';
-import { call, isDesktop } from '../shared/lib/client';
+import { call, isDesktop, isLive } from '../shared/lib/client';
 import { noticeMessage } from '../shared/lib/call-error';
 import { readLocal, removeLocal, writeLocal } from '../shared/lib/local-store';
 import { hasTransitionSource, withViewTransition } from '../shared/lib/view-transition';
@@ -17,7 +17,7 @@ export function useWorkbenchNavigation({ draft, catalog, preferences, overlay, s
     return () => window.removeEventListener('workbench-toggle-sidebar', toggleSidebar);
   }, [toggleSidebar]);
   const [page, setPageNow] = useState(() => {
-    if (isDesktop) {
+    if (isLive) {
       const saved = readLocal('yovoice-active-page');
       const listPages = ['text', 'story', 'music', 'score', 'sfx', 'characters', 'transcribe', 'settings'];
       return saved && listPages.includes(saved) ? saved : 'text';

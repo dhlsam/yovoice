@@ -37,11 +37,28 @@ yovoice models download index-2.5-q8
 | --- | --- |
 | macOS · Apple Silicon | `--backend metal`、`--backend cpu` |
 | Windows · x64 | `--backend cpu`、`--backend cuda`、`--backend vulkan` |
-| Linux · x64 | `--backend cpu`、`--backend vulkan` |
+| Linux · x64 | `--backend cpu`、`--backend cuda`、`--backend vulkan` |
 
 GPU 后端需要兼容的硬件和驱动。切换后端时重新运行 `setup`。
 
 模型默认从 ModelScope 下载，可添加 `--source huggingface` 或 `--source mirror` 切换来源。下载支持断点续传和自动校验。只能安装 yovoice 列出的模型包，输入要求和示例见[模型选择](models_zh.md)。
+
+## 运行网页版
+
+```sh
+yovoice web --listen 0.0.0.0:8080 --web-dir web/dist
+```
+
+`web` 用 HTTP 提供完整的创作界面，任意机器的浏览器都能使用，推理仍在服务器本地完成。需要先用 `--web-dir` 指定前端产物（默认 `web/dist`），并准备至少 32 个字符的访问令牌：
+
+```sh
+export YOVOICE_WEB_TOKEN="$(openssl rand -hex 32)"
+yovoice web --listen 0.0.0.0:8080
+```
+
+不设置令牌时会在启动时随机生成，打印出的 `loginUrl` 可直接登录；接口也接受 `Authorization: Bearer <令牌>`。加 `--tls-cert` 与 `--tls-key` 可以直接启用 HTTPS，也可以放在反向代理后面。
+
+容器与显卡服务器见[网页版与 Docker 部署指南](docker_zh.md)。
 
 ## 生成语音
 

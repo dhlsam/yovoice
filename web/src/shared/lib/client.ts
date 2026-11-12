@@ -2,18 +2,23 @@ import type { AudioAsset, State, Voice } from '../workbench';
 import { decodeAudio, toBase64 } from './sound';
 import { CallError, parseCallError } from './call-error';
 import { desktopCall, desktopMediaUrl, isDesktop, isLinux, isMac, reportDesktop, subscribeDesktop } from './bridge';
+import { isServer, serverCall, serverExportURL, serverMediaUrl, subscribeServer } from './server';
 import { assertUploadSize } from './upload-limit';
 
-// 界面统一的后端入口：桌面端经宿主桥接调用 Go 服务，浏览器预览使用本地模拟后端。
+// 界面统一的后端入口：桌面端经宿主桥接调用 Go 服务，网页版直接用 HTTP 接口，浏览器预览使用本地模拟后端。
 // 预览后端连同它带的模型目录等数据只在浏览器里用到，按需加载，不进桌面端的首屏包；
 // 加载完成后记住模块，之后的调用与静态引入时一样同步进入预览后端，不多等一拍。
 type PreviewBackend = typeof import('./preview-backend');
 let loaded: PreviewBackend | undefined;
 const preview = () => loaded ? Promise.resolve(loaded) : import('./preview-backend').then(backend => (loaded = backend));
-export { CallError, parseCallError, isDesktop, isLinux, isMac };
+export { CallError, parseCallError, isDesktop, isLinux, isMac, isServer };
+
+// 有真实后端时才能用推理、音色与文件接口；浏览器预览只有模拟实现。
+export const isLive = isDesktop || isServer;
 
 export function subscribe(listener: (state: State) => void) {
   if (isDesktop) return subscribeDesktop(listener);
+  if (isServer) return subscribeServer(listener);
   if (loaded) return loaded.subscribePreview(listener);
   let unsubscribe: (() => void) | undefined, cancelled = false;
   void preview().then(backend => { if (!cancelled) unsubscribe = backend.subscribePreview(listener); });
@@ -22,19 +27,20 @@ export function subscribe(listener: (state: State) => void) {
 
 export function call<T = unknown>(method: string, data: unknown = {}): Promise<T> {
   if (isDesktop) return desktopCall<T>(method, data);
+  if (isServer) return serverCall<T>(method, data);
   if (loaded) return loaded.previewCall<T>(method, data);
   return preview().then(backend => backend.previewCall<T>(method, data));
 }
 
 export async function importTimelineFile(file: File): Promise<AudioAsset> {
   const name = file.name.replace(/\.[^.]+$/, '').slice(0, 120);
-  if (!isDesktop) return (await preview()).previewImportTimeline(file, name);
+  if (!isLive) return (await preview()).previewImportTimeline(file, name);
   assertUploadSize(file);
   return call<AudioAsset>('timeline.import', { name, base64: await toBase64(file) });
 }
 
 export async function importTimelineGeneration(generationID: string): Promise<AudioAsset> {
-  if (!isDesktop) return (await preview()).previewImportTimelineGeneration(generationID);
+  if (!isLive) return (await preview()).previewImportTimelineGeneration(generationID);
   return call<AudioAsset>('timeline.fromGeneration', { id: generationID });
 }
 
@@ -45,7 +51,7 @@ export async function decodeVoiceSource(file: File): Promise<AudioBuffer> {
   try {
     buffer = await decodeAudio(file, 24000);
   } catch (error) {
-    if (!isDesktop) throw error;
+    if (!isLive) throw error;
     const wav = await call<string>('voice.decode', { base64: await toBase64(file) });
     buffer = await decodeAudio(await (await fetch(`data:audio/wav;base64,${wav}`)).arrayBuffer(), 24000);
   }
@@ -55,19 +61,19 @@ export async function decodeVoiceSource(file: File): Promise<AudioBuffer> {
 
 // 长录音先挑出最适合克隆的一段（与导入时自动截取同一算法）；预览后端不分析音频，取开头 10 秒。
 export async function suggestVoiceSource(file: File): Promise<{ start: number; end: number }> {
-  if (!isDesktop) return { start: 0, end: 10 };
+  if (!isLive) return { start: 0, end: 10 };
   return call<{ start: number; end: number }>('voice.suggestSource', { base64: await toBase64(file) });
 }
 
 export async function importVoiceFile(file: File): Promise<Voice> {
-  if (!isDesktop) return (await preview()).previewImportVoice(file);
+  if (!isLive) return (await preview()).previewImportVoice(file);
   assertUploadSize(file);
   return call<Voice>('voice.record', { name: file.name.replace(/\.[^.]+$/, ''), base64: await toBase64(file) });
 }
 
 // 翻唱扒谱：上传歌曲交给后台用 SheetSage2 提取旋律；浏览器预览不做推理。
 export async function coverMelodyFile(projectId: string, file: File): Promise<void> {
-  if (!isDesktop) throw new CallError('@yovoice.error.previewDesktopOnly');
+  if (!isLive) throw new CallError('@yovoice.error.previewDesktopOnly');
   assertUploadSize(file);
   await call('melody.cover', { projectId, base64: await toBase64(file) });
 }
@@ -77,7 +83,7 @@ export interface TranscribeSelection { id: string; tracks: TranscribeTrack[] }
 
 // 文件只上传一次。单轨立即转写，多轨返回待选择的上传编号。
 export async function transcribeSpeechFile(file: File, maxMB: number, signal: AbortSignal): Promise<TranscribeSelection | null> {
-  if (!isDesktop) { await call('speech.transcribe', { name: file.name, base64: '' }); return null; }
+  if (!isLive) { await call('speech.transcribe', { name: file.name, base64: '' }); return null; }
   if (file.size > maxMB * 1024 * 1024) throw new CallError('@yovoice.error.transcribeTooLarge', { size: maxMB % 1024 ? `${maxMB} MB` : `${maxMB / 1024} GB` });
   const response = await fetch(`/api/transcribe?name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file, signal });
   const reply = await response.json().catch(() => ({})) as { result?: true | TranscribeSelection; error?: unknown };
@@ -86,9 +92,11 @@ export async function transcribeSpeechFile(file: File, maxMB: number, signal: Ab
   return reply.result === true ? null : reply.result;
 }
 
-// 音频地址：桌面端是服务上的固定地址，浏览器预览是临时 blob 地址；用完交给 releaseMediaUrl 释放。
+// 音频地址：桌面端是服务上的固定地址，网页版是服务上的相对地址，浏览器预览是临时 blob 地址；用完交给 releaseMediaUrl 释放。
 export async function mediaUrl(kind: 'voices' | 'outputs', file: string): Promise<string> {
-  return isDesktop ? desktopMediaUrl(kind, file) : (await preview()).previewMediaUrl(file);
+  if (isDesktop) return desktopMediaUrl(kind, file);
+  if (isServer) return serverMediaUrl(kind, file);
+  return (await preview()).previewMediaUrl(file);
 }
 
 // 释放 mediaUrl 返回的地址；固定地址无需释放，可以对任何结果调用。
@@ -133,29 +141,48 @@ export interface AudioExportOptions { format?: AudioExportFormat; loudness?: num
 // 让本地服务把版本或上传的临时文件转成所选格式，再交给宿主弹保存框；返回用户是否保存。
 async function encodeAndSave(source: { kind: 'outputs' | 'export'; id: string }, name: string, { format = 'wav', loudness, tags }: AudioExportOptions): Promise<boolean> {
   const reply = await call<{ id: string }>('export.encode', { ...source, format, loudness: source.kind === 'outputs' ? loudness : undefined, ...(format === 'wav' ? {} : tags) });
+  if (isServer) return downloadExport(reply.id, name, format);
   return call<boolean>('audio.export', { id: reply.id, name: `${exportName(name)}.${format}` });
 }
 
+// 网页版没有宿主保存框：把服务上导出的文件取回来，交给浏览器下载。
+async function downloadExport(id: string, name: string, format: string): Promise<boolean> {
+  const response = await fetch(serverExportURL(id));
+  if (!response.ok) throw new CallError('@yovoice.error.unknown', { detail: `export download ${response.status}` });
+  download(await response.blob(), `${exportName(name)}.${format}`);
+  return true;
+}
+
 // 界面合成的音频（时间线导出）：桌面端先直接上传给本地服务落成临时文件，宿主再弹保存框复制，
-// 不经宿主消息通道传音频字节，长音频不受消息大小限制；浏览器预览直接下载 WAV。
+// 不经宿主消息通道传音频字节，长音频不受消息大小限制；网页版上传后取回文件下载，浏览器预览直接下载 WAV。
 // loudness 为目标响度（LUFS）时由本地服务整体调整音量后再保存；选了 FLAC / M4A 时再转码一次。
 export async function saveAudio(blob: Blob, name: string, loudness?: number, format: AudioExportFormat = 'wav'): Promise<boolean> {
   return logged(isDesktop ? format : 'wav', async () => {
-    if (!isDesktop) { download(blob, `${exportName(name)}.wav`); return true; }
+    if (!isLive) { download(blob, `${exportName(name)}.wav`); return true; }
     const response = await fetch(loudness ? `/api/export-audio?loudness=${loudness}` : '/api/export-audio', { method: 'POST', body: blob });
     const reply = await response.json().catch(() => ({})) as { id?: string; error?: unknown };
     if (!response.ok || !reply.id) throw reply.error ? parseCallError(reply.error) : new CallError('@yovoice.error.unknown', { detail: `export upload ${response.status}` });
     if (format !== 'wav') return encodeAndSave({ kind: 'export', id: reply.id }, name, { format });
+    if (isServer) return downloadExport(reply.id, name, 'wav');
     return call<boolean>('audio.export', { id: reply.id, name: `${exportName(name)}.wav` });
   });
 }
 
 // 导出已生成的版本：原样 WAV 由宿主弹出保存框后直接复制 outputs 中的文件，不经页面传音频字节，长歌也不受消息大小限制；
-// 选了目标响度或其他格式时先由本地服务生成临时文件。浏览器预览没有文件可复制，取回音频后下载 WAV。
+// 选了目标响度或其他格式时先由本地服务生成临时文件。网页版直接下载服务上的文件，浏览器预览没有文件可复制，取回音频后下载 WAV。
 export async function exportOutput(id: string, fileName: string, name: string, options: AudioExportOptions = {}): Promise<boolean> {
   if (isDesktop) {
     const format = options.format ?? 'wav';
     if (format === 'wav' && !options.loudness) return logged('wav', () => call<boolean>('output.export', { kind: 'outputs', id, name: `${exportName(name)}.wav` }));
+    return logged(format, () => encodeAndSave({ kind: 'outputs', id }, name, options));
+  }
+  if (isServer) {
+    const format = options.format ?? 'wav';
+    if (format === 'wav' && !options.loudness) {
+      const response = await fetch(serverMediaUrl('outputs', fileName));
+      if (!response.ok) throw new CallError('@yovoice.error.unknown', { detail: `output download ${response.status}` });
+      return logged('wav', async () => { download(await response.blob(), `${exportName(name)}.wav`); return true; });
+    }
     return logged(format, () => encodeAndSave({ kind: 'outputs', id }, name, options));
   }
   const url = await mediaUrl('outputs', fileName);
