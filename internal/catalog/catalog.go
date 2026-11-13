@@ -402,6 +402,9 @@ func RuntimeArchives(backend string) ([]RuntimeArchive, error) {
 		switch backend {
 		case "cpu", "vulkan":
 			names = []string{"bin-ubuntu-x64-" + backend + "-portable.tar.gz"}
+		case "cuda":
+			// 上游在 Linux 只提供 CUDA 12.8 构建，服务端推理与 Colab 上的是同一份二进制。
+			names = []string{"bin-ubuntu-x64-cuda12.8-colab.tar.gz", "cudart-ubuntu-x64-cuda12.8.tar.gz"}
 		}
 	}
 	if len(names) == 0 {

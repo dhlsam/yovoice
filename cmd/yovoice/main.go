@@ -30,6 +30,7 @@ var version = "dev"
 const usage = `yovoice：独立本地语音与音乐生成，无需桌面 App。
 用法：
   yovoice serve [--listen 127.0.0.1:8080] [--tls-cert FILE --tls-key FILE] [--generation-timeout 30m]
+  yovoice web [--listen 0.0.0.0:8080] [--web-dir DIR] [--token TOKEN | --token-file FILE] [--tls-cert FILE --tls-key FILE]（网页版，浏览器直接访问界面与接口）
   yovoice mcp [--generation-timeout 30m]（以 stdio 提供 MCP，供本机客户端作为子进程启动）
   yovoice status [--data-dir DIR] [--json]
   yovoice setup [--backend metal|cpu|vulkan|cuda|cuda13]
@@ -62,6 +63,8 @@ Kokoro：--speaker zf_xiaobei（v1.0）或 zf_001（v1.1-zh），语言随音色
   ACE-Step 可用 --language zh 指定演唱语言；时长等用 --option，如 --option 'duration_seconds=60'。
   Stable Audio 音效款生成音效：--text 描述声音，--option 'duration_seconds=5'。
 serve 同时提供 HTTP API 与 /mcp，启动前设置至少 32 字符的 YOVOICE_API_TOKEN。
+web 是网页版：浏览器打开监听地址后用令牌登录，令牌取自 --token、--token-file 或 YOVOICE_WEB_TOKEN；
+  未设置时临时生成，启动日志里的 loginUrl 可直接登录。接口也接受 Authorization: Bearer 令牌。
 mcp 独占数据目录，无需令牌；结果返回本机 WAV 路径，upload_voice 可传本机音频路径。
 所有命令支持 --data-dir DIR、--json。stdout 输出 JSON，进度写 stderr。
 生成与下载阻塞至完成；Ctrl-C 取消并清理推理进程。已有输出文件不会被覆盖。
@@ -119,7 +122,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) error {
 		args = args[1:]
 	}
 	switch command {
-	case "serve", "mcp", "status", "setup", "models list", "models download", "voices list", "voices import", "generate", "separate", "to-midi", "transcribe":
+	case "serve", "web", "mcp", "status", "setup", "models list", "models download", "voices list", "voices import", "generate", "separate", "to-midi", "transcribe":
 	default:
 		return fmt.Errorf("未知命令 %q；使用 --help 查看用法", command)
 	}
@@ -129,6 +132,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) error {
 	fs.Bool("json", false, "JSON 输出（默认）")
 	backend, source, name := "", "", ""
 	address, cert, key := "", "", ""
+	var web webOptions
 	var generationTimeout time.Duration
 	d := schema.DefaultDraft()
 	d.Title = "CLI 语音"
@@ -149,6 +153,13 @@ func run(ctx context.Context, args []string, out, progress io.Writer) error {
 			fs.StringVar(&cert, "tls-cert", "", "TLS 证书")
 			fs.StringVar(&key, "tls-key", "", "TLS 私钥")
 		}
+	case "web":
+		fs.StringVar(&web.listen, "listen", "0.0.0.0:8080", "网页版监听地址")
+		fs.StringVar(&web.assets, "web-dir", "", "前端产物目录，默认 web/dist")
+		fs.StringVar(&web.token, "token", "", "访问令牌，至少 32 个字符；未设置时用环境变量 YOVOICE_WEB_TOKEN")
+		fs.StringVar(&web.tokenFile, "token-file", "", "从文件读取访问令牌")
+		fs.StringVar(&web.cert, "tls-cert", "", "TLS 证书")
+		fs.StringVar(&web.key, "tls-key", "", "TLS 私钥")
 	case "setup":
 		initial := "cpu"
 		if runtime.GOOS == "darwin" {
@@ -465,6 +476,14 @@ func run(ctx context.Context, args []string, out, progress io.Writer) error {
 	switch command {
 	case "serve":
 		return serveAPI(ctx, w, address, os.Getenv("YOVOICE_API_TOKEN"), cert, key, generationTimeout, out)
+	case "web":
+		// 容器里预置了内核（WORKBENCH_ENGINE）时直接登记，首次启动即用上显卡。
+		if bundled := os.Getenv("WORKBENCH_ENGINE"); bundled != "" {
+			if err = w.UseBundled(bundled); err != nil {
+				return err
+			}
+		}
+		return serveWeb(ctx, w, web, out)
 	case "mcp":
 		return serveMCP(ctx, w, generationTimeout, &mcp.StdioTransport{})
 	case "status":

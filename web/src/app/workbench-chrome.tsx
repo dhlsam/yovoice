@@ -17,7 +17,7 @@ import { SfxEditor } from '../features/sfx/sfx-editor';
 import { sfxModelId } from '../features/sfx/sfx-draft';
 import { Timeline } from '../features/media/timeline';
 import { Player } from '../features/media/player';
-import { call, exportOutput, isDesktop } from '../shared/lib/client';
+import { call, exportOutput, isDesktop, isServer } from '../shared/lib/client';
 import { noticeMessage } from '../shared/lib/call-error';
 import { isYuE, projectKind, createDraft, synthesisSettings, type Draft, type EngineInfo, type State, type ModelPackage, type Voice, type Generation, type Track, preferredModel, newId } from '../shared/workbench';
 // 助手（含形象与点阵动画）首屏后再加载，不占主包。
@@ -252,7 +252,8 @@ export function WorkbenchChrome({ state, catalog, catalogRevision, engine, ready
   const collapsedAction = busy ? <Button size="sm" icon={<LoaderCircle className="generation-spinner" />} label={t('@yovoice.create.cancelGenerate')} onClick={() => run(() => call('operation.cancel'))} />
     : <Button size="sm" variant="primary" label={generateLabel} aria-keyshortcuts="Control+Enter" isDisabled={!generateReady} onClick={generate} />;
   return <VStack className={`workbench ${isDesktop ? 'desktop' : 'preview'}`} style={{ '--app-nav': `${navigation.size}px`, '--app-inspector': `${inspectorPanel.size}px` } as CSSProperties} gap={0}>
-    {!isDesktop ? <HStack as="header" className="browser-titlebar" gap={2} vAlign="center"><Button label={navigation.isCollapsed ? t('@yovoice.app.expandSidebar') : t('@yovoice.app.collapseSidebar')} isIconOnly variant="ghost" size="sm" icon={<PanelLeft size={17} />} aria-expanded={!navigation.isCollapsed} onClick={toggleSidebar} /><b>yovoice</b><small>{t('@yovoice.app.browserPreview')}</small>
+    {!isDesktop ? <HStack as="header" className="browser-titlebar" gap={2} vAlign="center"><Button label={navigation.isCollapsed ? t('@yovoice.app.expandSidebar') : t('@yovoice.app.collapseSidebar')} isIconOnly variant="ghost" size="sm" icon={<PanelLeft size={17} />} aria-expanded={!navigation.isCollapsed} onClick={toggleSidebar} /><b>yovoice</b>{/* 网页版是真实服务，不需要预览提示。 */}
+      {isServer ? null : <small>{t('@yovoice.app.browserPreview')}</small>}
       {ready && !assistantHidden && launcherHidden && !assistantOpen ? <PageBoundary name="assistant-title"><Suspense fallback={null}><AssistantTitleButton open={assistantOpen} toggle={() => setAssistantOpen(open => !open)} /></Suspense></PageBoundary> : null}
       {inspectorAvailable ? <Button label={inspectorCollapsed ? t('@yovoice.app.expandInspector') : t('@yovoice.app.collapseInspector')} isIconOnly variant="ghost" size="sm" icon={<PanelRight size={17} />} aria-expanded={!inspectorCollapsed} onClick={toggleInspectorPanel} /> : null}</HStack> : null}
     <AppShell variant="elevated" sideNav={navigation.isCollapsed ? undefined : sidebar} mobileNav={{ breakpoint: 'none' }} height="fill"><VStack className="app-sheet" gap={0}>

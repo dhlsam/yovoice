@@ -144,6 +144,26 @@ Run `yovoice serve` to provide an authenticated HTTP API and MCP inference servi
 
 <a href="https://glama.ai/mcp/servers/leemysw/yovoice"><img width="380" height="200" src="https://glama.ai/mcp/servers/leemysw/yovoice/badges/card.svg" alt="yovoice MCP server on Glama" /></a>
 
+## Web version on a server
+
+Run the whole studio in a browser on a server with Docker:
+
+```sh
+docker build -f deploy/Dockerfile -t yovoice .
+docker run -d -p 8080:8080 -e YOVOICE_WEB_TOKEN="$(openssl rand -hex 32)" -v yovoice-data:/data yovoice
+```
+
+Open <http://localhost:8080> and sign in with the token printed by `docker logs yovoice`. NVIDIA GPUs use the CUDA image:
+
+```sh
+docker build -f deploy/Dockerfile.cuda -t yovoice:cu128 .
+docker run -d --gpus all -p 8080:8080 -e YOVOICE_WEB_TOKEN="$(openssl rand -hex 32)" -v yovoice-data:/data yovoice:cu128
+```
+
+See the [web version and Docker deployment guide](docs/docker.md) for tokens, reverse proxies and resource notes.
+
+---
+
 ## Development
 
 ```sh

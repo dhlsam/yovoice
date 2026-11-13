@@ -4,6 +4,8 @@
   "archives": {
     "audio-v0.9.3-bin-ubuntu-x64-cpu-portable.tar.gz": "02156f7a7bd9924902cec26be35087d3806c7e348be344b1ec28cac0c1af3929",
     "audio-v0.9.3-bin-ubuntu-x64-vulkan-portable.tar.gz": "10ac6b5cb72bc9266e5a600407dbcc2a3eaf87139a3e01c064bf3035d11f81b8",
+    "audio-v0.9.3-bin-ubuntu-x64-cuda12.8-colab.tar.gz": "5be3e8d515fb244387de87958668ebb729d9442de6a53df12e4c718ea918419d",
+    "audio-v0.9.3-cudart-ubuntu-x64-cuda12.8.tar.gz": "2fcbaff8078b9eaed47a4a8e879c10dcf1f12fd31f2d52b29214fc9d45cfa198",
     "audio-v0.9.3-bin-macos-arm64-metal.tar.gz": "70a84c2b61ce5ef99547a12affab9b0d40daf08666baf7da4f940d5c7b722819",
     "audio-v0.9.3-bin-windows-x64-cpu-portable.zip": "f5fa4662b7ec323dbe31d37e224e46159b064836a9005da384551a5248771eeb",
     "audio-v0.9.3-bin-windows-x64-vulkan-portable.zip": "51f8d8ce6cc7789bc9dc3d15f35e05f143aaf2ce1cbecc525a4104bcdde82a42",
